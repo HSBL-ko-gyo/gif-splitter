@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アニメーションGIF分解ツール</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .header-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .header-links a {
+            color: #007bff;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .header-links a:hover {
+            background-color: #f0f0f0;
+            text-decoration: underline;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .description {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 6px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        #preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .frame {
+            border: 1px solid #ddd;
+            padding: 5px;
+            background-color: white;
+        }
+        .frame img {
+            display: block;
+        }
+        .frame p {
+            margin: 5px 0 0;
+            font-size: 12px;
+            text-align: center;
+        }
+        .hidden {
+            display: none;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #download-all {
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>アニメーションGIF分解ツール</h1>
+    
+    <div class="header-links">
+        <a href="https://www.aconvert.com/jp/image/gif-to-png/" target="_blank">GitHub</a>
+        <a href="https://ezgif.com/optimize" target="_blank">ChameleonKey</a>
+        <a href="https://convertio.co/jp/gif-converter/" target="_blank">ハシビロ工業</a>
+    </div>
+    
+    <div class="container">
+        <div class="description">
+            <p><strong>このツールについて：</strong> GIFアニメーションを各フレームごとに分解し、連番のPNG画像として保存できます。アニメーションの編集や特定フレームの抽出に便利です。</p>
+            <p><strong>出力形式：</strong> PNG（高品質透過画像）</p>
+        </div>
+        
+        <div class="upload-area" id="upload-area">
+            <p>GIFファイルをここにドラッグ＆ドロップするか、クリックして選択してください</p>
+            <input type="file" id="file-input" accept=".gif" class="hidden">
+        </div>
+        
+        <div class="loading hidden" id="loading">
+            <p>処理中...</p>
+        </div>
+        
+        <button id="download-all" class="hidden">すべてのフレームをダウンロード (ZIP)</button>
+        
+        <div id="preview"></div>
+    </div>
+
+    <!-- libGIFライブラリを使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/buzzfeed/libgif-js@master/libgif.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+            const preview = document.getElementById('preview');
+            const loading = document.getElementById('loading');
+            const downloadAll = document.getElementById('download-all');
+            
+            let frames = [];
+            let frameImages = [];
+            
+            // ドラッグ＆ドロップイベント
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.style.borderColor = '#007bff';
+            });
+            
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.style.borderColor = '#ccc';
+            });
+            
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.style.borderColor = '#ccc';
+                
+                if (e.dataTransfer.files.length) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+            
+            // クリックしてファイル選択
+            uploadArea.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length) {
+                    handleFile(fileInput.files[0]);
+                }
+            });
+            
+            // ファイル処理
+            function handleFile(file) {
+                if (!file.type.includes('gif')) {
+                    alert('GIFファイルのみ対応しています。');
+                    return;
+                }
+                
+                // 初期化
+                preview.innerHTML = '';
+                frames = [];
+                frameImages = [];
+                loading.classList.remove('hidden');
+                downloadAll.classList.add('hidden');
+                
+                // ファイルURLを作成
+                const fileURL = URL.createObjectURL(file);
+                processGIF(fileURL);
+            }
+            
+            // GIF処理
+            function processGIF(fileURL) {
+                try {
+                    // SuperGifを使用してGIFをロード
+                    const gif = new SuperGif({ 
+                        gif: document.createElement('img'),
+                        auto_play: false 
+                    });
+                    
+                    gif.load_url(fileURL, function() {
+                        try {
+                            const numFrames = gif.get_length();
+                            const canvas = gif.get_canvas();
+                            const ctx = canvas.getContext('2d');
+                            
+                            // 各フレームを処理
+                            for (let i = 0; i < numFrames; i++) {
+                                gif.move_to(i);
+                                
+                                // フレーム画像を取得
+                                const imageData = canvas.toDataURL('image/png');
+                                frameImages.push(imageData);
+                                
+                                // フレームをUIに追加
+                                const frameElement = document.createElement('div');
+                                frameElement.className = 'frame';
+                                
+                                const img = document.createElement('img');
+                                img.src = imageData;
+                                img.dataset.index = i;
+                                
+                                const p = document.createElement('p');
+                                p.textContent = `フレーム ${i + 1}`;
+                                
+                                const downloadLink = document.createElement('a');
+                                downloadLink.href = imageData;
+                                downloadLink.download = `frame_${(i + 1).toString().padStart(3, '0')}.png`;
+                                downloadLink.textContent = 'ダウンロード';
+                                downloadLink.style.display = 'block';
+                                downloadLink.style.textAlign = 'center';
+                                downloadLink.style.marginTop = '5px';
+                                downloadLink.style.fontSize = '12px';
+                                
+                                frameElement.appendChild(img);
+                                frameElement.appendChild(p);
+                                frameElement.appendChild(downloadLink);
+                                preview.appendChild(frameElement);
+                            }
+                            
+                            loading.classList.add('hidden');
+                            downloadAll.classList.remove('hidden');
+                        } catch (error) {
+                            console.error('GIF処理エラー:', error);
+                            loading.classList.add('hidden');
+                            alert('GIFの処理中にエラーが発生しました。');
+                        }
+                    });
+                } catch (error) {
+                    console.error('GIF処理エラー:', error);
+                    loading.classList.add('hidden');
+                    alert('GIFの処理中にエラーが発生しました。');
+                }
+            }
+            
+            // すべてのフレームをZIPでダウンロード
+            downloadAll.addEventListener('click', async function() {
+                if (frameImages.length === 0) return;
+                
+                const zip = new JSZip();
+                
+                frameImages.forEach((dataURL, index) => {
+                    const base64Data = dataURL.split(',')[1];
+                    zip.file(`frame_${(index + 1).toString().padStart(3, '0')}.png`, base64Data, {base64: true});
+                });
+                
+                // ZIPを生成してダウンロード
+                zip.generateAsync({type: 'blob'}).then(function(content) {
+                    saveAs(content, 'gif_frames.zip');
+                });
+            });
+        });
+    </script>
+</body>
+</html> 
