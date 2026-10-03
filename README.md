@@ -48,5 +48,5 @@
 
 このプロジェクトはシンプルな静的HTMLファイルとして実装されているため、特別なセットアップは必要ありません。
 
-1. リポジトリをクローン: `git clone https://github.com/yourusername/gif-splitter.git`
+1. リポジトリをクローン: `git clone https://github.com/HSBL-ko-gyo/gif-splitter.git`
 2. `index.html` をブラウザで開く
